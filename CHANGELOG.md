@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
+
+## [2.1.1] – 2025-07-08
+### Changed
+- Updated `test/unit-test-framework.ts` file with version 1.0.0 from [Unit Testing Framework](https://github.com/dlealv/officescripts-unit-test-framework) repository.
+- Improved documentation of `git-basics.md` adding additional commands and common use cases.
+- Minor corrections in `test/main.ts` file
+
 ## [2.1.0] – 2025-06-26
 
 ### Added
