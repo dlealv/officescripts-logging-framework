@@ -180,5 +180,50 @@ git push origin --delete my-feature   # Delete remote branch
 
 ---
 
+## 13. Protected Branch Workflow (When direct push to `main` is restricted)
+
+Many repositories protect the `main` branch by requiring pull requests for any changes.  
+If you try to push directly to `main` and it is protected, you will see an error and your push will be rejected.  
+**Use this workflow instead:**
+
+### Steps
+
+1. **Create a new branch from main (if you haven't already):**
+    ```bash
+    git checkout main
+    git pull origin main
+    git checkout -b my-feature
+    ```
+
+2. **Make your changes, stage, and commit:**
+    ```bash
+    # ...edit files...
+    git add .
+    git commit -m "Describe your changes"
+    ```
+
+3. **Push your branch to GitHub:**
+    ```bash
+    git push -u origin my-feature
+    ```
+
+4. **Create a Pull Request**  
+   Go to GitHub and open a pull request from `my-feature` into `main`.  
+   (Follow any required review or CI steps.)
+
+5. **Merge the Pull Request**  
+   Once approved and checks pass, merge the PR into `main` via GitHub.
+
+6. **Update your local main branch:**
+    ```bash
+    git checkout main
+    git pull origin main
+    ```
+
+**Tip:**  
+The `-u` flag in `git push -u origin my-feature` sets up tracking so future `git push` and `git pull` commands know which remote branch to use.
+
+---
+
 **Tip:**  
 Use `git help <command>` for detailed info about any command!
