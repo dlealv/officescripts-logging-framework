@@ -11,6 +11,7 @@ A concise cheat sheet with essential commands and common workflows for daily Git
 git config --global user.name "Your Name"
 git config --global user.email "you@example.com"
 git config --global core.editor "code --wait"  # Set VSCode as editor (optional)
+git config --global fetch.prune true           # Automatically delete local branches that have been merged into the branch pulled
 ```
 
 ---
