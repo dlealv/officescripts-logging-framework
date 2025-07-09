@@ -339,7 +339,7 @@ This framework is designed to work seamlessly in both Node.js/TypeScript environ
 
 - **Tested Environments:**  
   - Node.js/TypeScript (VSCode)
-  - Office Scripts (Excel on the web)
+  - Office Scripts (Excel)
 
 - **Usage in Office Scripts:**  
   To use the framework in Office Scripts, just paste the `dist/logger.ts` file at the beginning of your script. If you want to run all tests, then you need to paste the source files into your script in the following order:  
@@ -349,7 +349,7 @@ This framework is designed to work seamlessly in both Node.js/TypeScript environ
   The order matters because Office Scripts requires that all objects and functions are declared before they are used.
 
 - **Office Scripts Compatibility Adjustments:**  
-  - The code avoids unsupported keywords such as `any`, `export`, and `import`.
+  - The code avoids unsupported keywords such as `any`, `require`, `export`, and `import`.
   - Office Scripts does not allow calling `ExcelScript` API methods on Office objects inside class constructors; the code is structured to comply with this limitation.
   - Office Scripts doesn't allow defining static properties that are functions. For example, `shortFormatterFun` must be defined outside the class.
   - Additional nuances and workarounds are documented in the source code comments.
@@ -410,9 +410,10 @@ This ensures the logging framework is robust and reliable across both developmen
 ## Additional Information
 
 - For developer setup, testing, or CI details, see [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)
-- For debug setup, see [VSCode Debugging.md](docs/VSCode%20Debugging.md)
-- TypeDoc documentation: [TYPEDOC](docs/typedoc/index.html)
-- Git basic documentation: [git-basics](docs/git-basics.md)
+- For debug setup, see [docs/VSCode Debugging.md](docs/VSCode%20Debugging.md)
+- TypeDoc documentation: [TYPEDOC](https://dlealv.github.io/officescripts-logging-framework/typedoc/)
+- Git basic documentation: [docs/git-basics](docs/git-basics.md)
+- Unit testing framework repository: [officescripts-unit-test-framework](https://github.com/dlealv/officescripts-unit-test-framework) from the same author. Used for testing current repository. Check repository's details for more information.
 
 ## License
 
