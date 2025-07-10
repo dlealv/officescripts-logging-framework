@@ -61,13 +61,15 @@ git diff <commit> <commit>   # Show differences between two commits
 ## 6. Working with Branches
 
 ```bash
-git branch                   # List branches
-git branch <name>            # Create new branch
-git checkout <name>          # Switch to branch
-git checkout -b <name>       # Create and switch to branch
-git merge <name>             # Merge branch into current
-git branch -d <name>         # Delete a branch
-git branch -m <old> <new>    # Rename a branch
+git branch                       # List branches
+git branch <name>                # Create new branch
+git checkout <name>              # Switch to branch
+git checkout -b <name>           # Create and switch to branch
+git merge <name>                 # Merge branch into current
+git branch -d <name>             # Delete a branch
+git branch -D <name>             # Delete (forced) a branch
+git branch -m <old> <new>        # Rename a branch
+git push origin --delete <name>  # Delete remote branch 
 ```
 
 ---
