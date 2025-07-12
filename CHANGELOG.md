@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
+## [2.1.2] – 2025-07-12
+### Fixed
+- Removed the call `this.clearCellIfNotEmpty("")` in `ExcelAppender.constructor` since it produces an error in Office Script indicating: `Unexpected token 'this'`.
+### Changed
+- In `Logger`, `LoggerImpl` changed the name of the method `hasMessages` to `hasCriticalEvents` since it is more consistent with the purpose of the method
+- Improved TYPEDOC documentation for `src/logger.ts` file.
 
 ## [2.1.1] – 2025-07-08
 ### Changed
