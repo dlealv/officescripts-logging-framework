@@ -76,7 +76,7 @@ function main(workbook: ExcelScript.Workbook) {
 - **Default ConsoleAppender:**  
   - If you log a message and no appender has been added, a `ConsoleAppender` will be automatically created and added to ensure logs are not lost.
 - **Default Layout:**  
-  - If the layout was not previously set, then all log events sent to all appenders will use the default layout: `[YYYY-MM-DD hh:mm:ss,XXX] [TYPE] message`, where `XXX` represents milliseconds. The format is set via the `Logger.format(event: LogEvent)` method.
+  - If the layout was not previously set, then all log events sent to all appenders will use the default layout: `[YYYY-MM-DD hh:mm:ss,SSS] [TYPE] message`, where `SSS` represents milliseconds. The format is set via the `Layout` interface.
 - **Default factory for log event:**  
   - If the log event factory was not previously set via `AbstractAppender.setLogEventFactory(logEventFactory: LogEventFactory)`, then the log event will be built via: `new LogEventImpl(message: string, type: LOG_EVENT)`.
 
@@ -98,7 +98,7 @@ Set the **maximum verbosity level** of messages to be logged:
 - `Logger.LEVEL.TRACE`: All messages (most verbose)
 
 ### Error/Warning Handling Action
-
+In the event of sending an error/warning the following behaviour can be configured:
 - `Logger.ACTION.CONTINUE`: Log the event, continue script execution
 - `Logger.ACTION.EXIT`: Log the event and throw a `ScriptError`, terminating the script (default)
 
@@ -128,8 +128,8 @@ Set the **maximum verbosity level** of messages to be logged:
 - Get an array of all error/warning events: `logger.getCriticalEvents()`
 - Get error/warning counts: `logger.getErrCnt()`, `logger.getWarnCnt()`
 - Clear state (messages, counters, but not appenders): `logger.reset()` (production-safe, resets counters and critical event messages only)
-- Export state: `logger.exportState()`
-- Check if any error/warning log event has been sent to the appenders: `logger.hasErrors()`, `logger.hasWarnings()`, or `logger.hasMessages()`
+- Export state: `logger.exportState()`, serializes the current state of the logger to a plain object. , useful for capturing logs and metrics for post-run analysis.
+- Check if any error/warning log event has been sent to the appenders: `logger.hasErrors()`, `logger.hasWarnings()`, or `logger.hasCriticalEvents()`
 
 ### Resetting for Tests or Automation
 
@@ -207,7 +207,8 @@ If you want to change all log messages globally (e.g., to add an environment pre
 
 ```typescript
 // Custom LogEventFactory: prefix all messages with [PROD] for production environment
-const prodPrefixFactory: LogEventFactory = (msg: string, type: LOG_EVENT) => new LogEventImpl(`[PROD] ${msg}`, type)
+const prodPrefixFactory: LogEventFactory 
+    = (msg: string, type: LOG_EVENT) => new LogEventImpl(`[PROD] ${msg}`, type)
 AbstractAppender.setLogEventFactory(prodPrefixFactory)
 
 let logger = Logger.getInstance(Logger.LEVEL.INFO, Logger.ACTION.CONTINUE)
@@ -250,7 +251,7 @@ Produces the following:
 
 #### How it works
 
-- The third argument to all logging methods is `extraFields`:
+- The second argument to all logging methods is `extraFields`(optional):
   - `Logger.info(message, extraFields?)`
   - `Logger.warn(message, extraFields?)`
   - `Logger.error(message, extraFields?)`
@@ -278,7 +279,8 @@ console.log(`event=${event.toString()}`)
 ```
 Here is the `toString()` output (first line: info event with extra fields, second line: without extra fields):
 ```
-event(extra fields)=LogEventImpl: {timestamp="2025-06-19 19:10:34,586", type="INFO", message="Showing toString", extraFields={"user":"admin","sessionId":"123"}}
+event(extra fields)=LogEventImpl: {timestamp="2025-06-19 19:10:34,586", type="INFO", message="Showing toString", 
+    extraFields={"user":"admin","sessionId":"123"}}
 event=LogEventImpl: {timestamp="2025-06-19 19:10:34,586", type="INFO", message="Showing toString"}
 ```
 
@@ -360,11 +362,11 @@ This ensures the logging framework is robust and reliable across both developmen
 
 ## Troubleshooting & FAQ
 
-- **What if I call Logger methods before getInstance()?**  
+- **What if I call Logger methods before `getInstance()`?**  
   Lazy initialization means logging always works, with default config and console output.
 
 - **What happens if I don’t add an appender?**  
-  Logger auto-adds a `ConsoleAppender`.
+  Logger auto-adds a `ConsoleAppender`when sending the first log event.
 
 - **Can I log to both console and Excel?**  
   Yes, just add both appenders.
@@ -382,7 +384,7 @@ This ensures the logging framework is robust and reliable across both developmen
 - **Why can't I send a different message to different appenders?**  
   By design, all channels (appenders) receive the same log event message for consistency.
 
-- **Why does the output for ExcelAppender override the previous message?**
+- **Why does the output for `ExcelAppender` override the previous message?**
   By design, the use case for `ExcelAppender` was intended for the default configuration (i.e., a logger with `WARN` level and action `EXIT`). You may want the script to stop if there is any warning or error. Adding more than one event in the same cell (e.g., concatenating via `\n`) is possible, but this defeats the purpose of highlighting each event type with color, since the color will affect the entire cell content. To display each log event in its own cell, you would need to adjust or extend `ExcelAppender`.
 
 - **Why am I getting unexpected results when running some tests in Office Scripts compared to Node.js/TypeScript?**  
@@ -413,7 +415,7 @@ This ensures the logging framework is robust and reliable across both developmen
 - For debug setup, see [docs/VSCode Debugging.md](docs/VSCode%20Debugging.md)
 - TypeDoc documentation: [TYPEDOC](https://dlealv.github.io/officescripts-logging-framework/typedoc/)
 - Git basic documentation: [docs/git-basics](docs/git-basics.md)
-- Unit testing framework repository: [officescripts-unit-test-framework](https://github.com/dlealv/officescripts-unit-test-framework) from the same author. Used for testing current repository. Check repository's details for more information.
+- Unit testing framework repository: [officescripts-unit-test-framework](https://github.com/dlealv/officescripts-unit-test-framework) from the same author. Used for testing the current repository. Check repository's details for more information.
 
 ## License
 

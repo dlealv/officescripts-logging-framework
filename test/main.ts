@@ -305,6 +305,7 @@ class TestCase {
       Assert.equals(actualNum, expectedNum, `getCriticalEvents())--no log events sent${SUFFIX}`)
       Assert.equals(logger.hasErrors(), false, `hasErrors()--no errors logged${SUFFIX}`)
       Assert.equals(logger.hasWarnings(), false, `hasWarnings()--no warnings logged${SUFFIX}`)
+      Assert.isFalse(logger.hasCriticalEvents(), `hasMessages()--no messages logged${SUFFIX}`)
       // Checking the last log event sent via AbstractAppender
       Assert.isNull(appender.getLastLogEvent(), `getLastLogEvent()-is null${SUFFIX}`)
       return // No need to continue, since no log events will be sent
@@ -1864,7 +1865,7 @@ class TestCase {
     new LogEventImpl(warnMsg, LOG_EVENT.WARN)])
     let actualArr = TestCase.simplifyLogEvents(logger.getCriticalEvents())
     Assert.equals(actualArr, expectedArr, "loggerImplCounters(getMessages)")
-    Assert.equals(logger.hasMessages(), true, "loggerImplCounters(hasMessages)")
+    Assert.equals(logger.hasCriticalEvents(), true, "loggerImplCounters(hasMessages)")
     // Testing other events, don't affect the counters
     let msg = "Info event doesn't count testing counters for LoggerImpl"
     logger.info(msg)
