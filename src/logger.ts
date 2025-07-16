@@ -881,9 +881,10 @@ class LayoutImpl implements Layout {
  * Formats a log event as a short string as follows '[type] message'.
  * If extraFields are present in the event, they will be appended as a JSON object (surrounded by braces) to the output.
  * Example: `[ERROR] Something bad happened {"user":"dlealv","id":42}`.
- * Defined as a named function to ensure toString() returns the function name.
+ * Defined as a named function to ensure `toString()` of `LayoutImpl` returns the function name.
+ * @param event - The log event to format.
+ * @returns A formatted string representation of the log event, as it will be sent to the appenders.
  */
-
 LayoutImpl.shortFormatterFun = Object.freeze(function shortLayoutFormatterFun(event: LogEvent): string {
   const sType = LOG_EVENT[event.type]
   let extraFieldsStr = ""
@@ -898,9 +899,10 @@ LayoutImpl.shortFormatterFun = Object.freeze(function shortLayoutFormatterFun(ev
  * The timestamp is formatted as `YYYY-MM-DD HH:mm:ss,SSS`.
  * If extraFields are present in the event, they will be appended as a JSON object (surrounded by braces) to the  output.
  * Example: `[2025-06-19 15:06:41,123] [ERROR] Something bad happened {"user":"dlealv","id":42}`.
- * Defined as a named function to ensure toString() returns the function name.
+ * Defined as a named function to ensure `toString()` of `LayoutImpl` returns the function name.
+ * @param event - The log event to format.
+ * @returns A formatted string representation of the log event, as it will be sent to the appenders.
  */
-
 LayoutImpl.defaultFormatterFun = Object.freeze(function defaultLayoutFormatterFun(event: LogEvent): string {
   const sDATE = Utility.date2Str(event.timestamp)
   const sType = LOG_EVENT[event.type]

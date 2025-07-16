@@ -32,7 +32,7 @@ Copy the contents of `dist/logger.ts` into your script in the Office Scripts edi
 
 ```typescript
 // Set verbosity level up to INFO events, and continue on error/warning
-let logger = Logger.getInstance(Logger.LEVEL.INFO, Logger.ACTION.CONTINUE)
+const logger = LoggerImpl.getInstance(LoggerImpl.LEVEL.INFO, LoggerImpl.ACTION.CONTINUE)
 logger.addAppender(ConsoleAppender.getInstance()) // Add console appender
 ```
 > If you skip this step and just call `logger.info("...")`, the logger will be created with default settings (`WARN` level, `EXIT` action) and a console appender will be used automatically.
@@ -58,9 +58,9 @@ Display log output directly in a cell while your script runs:
 ```typescript
 function main(workbook: ExcelScript.Workbook) {
   // Set up logger to send logs to cell B1
-  const cell = workbook.getActiveWorksheet().getRange("B1")
-  let logger = Logger.getInstance(Logger.LEVEL.INFO, Logger.ACTION.CONTINUE)
-  logger.addAppender(ExcelAppender.getInstance(cell))
+  const cellRng = workbook.getActiveWorksheet().getRange("B1")
+  const logger = LoggerImpl.getInstance(LoggerImpl.LEVEL.INFO, LoggerImpl.ACTION.CONTINUE)
+  logger.addAppender(ExcelAppender.getInstance(cellRng))
 
   logger.info("Log written to Excel!")  // Output in cell B1: [2025-06-25 23:41:10,586] [INFO] Log written to Excel! (green text)
   logger.trace("Trace event in cell")   // Output in cell B1: [2025-06-25 23:41:10,586] [TRACE] Trace event in cell (gray text)
@@ -91,25 +91,25 @@ You can start logging immediately, but for best results (and explicit configurat
 
 Set the **maximum verbosity level** of messages to be logged:
 
-- `Logger.LEVEL.OFF`: No logs
-- `Logger.LEVEL.ERROR`: Only errors
-- `Logger.LEVEL.WARN`: Errors and warnings (default)
-- `Logger.LEVEL.INFO`: Errors, warnings, and info
-- `Logger.LEVEL.TRACE`: All messages (most verbose)
+- `LoggerImpl.LEVEL.OFF`: No logs
+- `LoggerImpl.LEVEL.ERROR`: Only errors
+- `LoggerImpl.LEVEL.WARN`: Errors and warnings (default)
+- `LoggerImpl.LEVEL.INFO`: Errors, warnings, and info
+- `LoggerImpl.LEVEL.TRACE`: All messages (most verbose)
 
 ### Error/Warning Handling Action
 In the event of sending an error/warning the following behaviour can be configured:
-- `Logger.ACTION.CONTINUE`: Log the event, continue script execution
-- `Logger.ACTION.EXIT`: Log the event and throw a `ScriptError`, terminating the script (default)
+- `LoggerImpl.ACTION.CONTINUE`: Log the event, continue script execution
+- `LoggerImpl.ACTION.EXIT`: Log the event and throw a `ScriptError`, terminating the script (default)
 
-> If the log level is `Logger.LEVEL.OFF`, no messages will be sent to any appender, and the action configuration does not take effect.
+> If the log level is `LoggerImpl.LEVEL.OFF`, no messages will be sent to any appender, and the action configuration does not take effect.
 
 ### Appenders
 
 - `ConsoleAppender`: Output to the Office Scripts console  
-  `Logger.addAppender(ConsoleAppender.getInstance())`
+  `logger.addAppender(ConsoleAppender.getInstance())`
 - `ExcelAppender`: Output to a specified Excel cell, with color coding  
-  `Logger.addAppender(ExcelAppender.getInstance(cellRange))`
+  `logger.addAppender(ExcelAppender.getInstance(cellRange))`
 
 ---
 
@@ -142,7 +142,7 @@ ExcelAppender.clearInstance()
 AbstractAppender.clearLayout()
 AbstractAppender.clearLogEventFactory()
 ```
-> The `clear*` family of methods (`clearInstance`, `clearLayout`, `clearLogEventFactory`) are available in the source files (`src/`). They are omitted from production builds (`dist/`).  
+> The `clear*` family of methods are available in the source files (`src/`). They are omitted from production builds (`dist/`).  
 > `logger.reset()` is always available in production and only resets error/warning counters and critical messages, not the logger/appender singletons or layout/factory.
 
 ---
@@ -152,11 +152,14 @@ AbstractAppender.clearLogEventFactory()
 You can customize how log messages are formatted or how log events are constructed. This is useful for integrating with other systems, outputting logs in a specific structure (e.g., JSON, XML), or adapting the logger for unique workflows.
 
 > **Important:**  
-> All customization via `AbstractAppender.setLayout()` or `AbstractAppender.setLogEventFactory()` must happen before any logger or appender is initialized or any log event is sent. These setters will not override existing configuration once logging has begun. When a log method is invoked it does lazy initialization for layout and log event factory, when they are required. That is why it is advised to change the configuration before logging begins.
+> - All customization using `AbstractAppender.setLayout()` or `AbstractAppender.setLogEventFactory()` **must be performed before** any logger or appender is initialized, or before any log event is sent. Once logging has started, these setters will not override the existing configuration.  
+> - **Why?** Both layout and log event factory are initialized lazily—when a log method is called, the framework checks if these are set and, if not, assigns the default implementations. Therefore, to ensure your custom configuration is applied, set them **before any logging occurs**.
+> - `AbstractAppender.getLayout()` returns the current layout if already set; otherwise, it initializes and returns the default layout (`new LayoutImpl()` i.e. using `LayoutImpl.defaultFormatterFun` as `formatter`). See section *External Functions*.
+> - `AbstractAppender.getLogEventFactory()` returns the current log event factory if already set; otherwise, it initializes and returns the default factory (`AbstractAppender.defaultLogEventFactoryFun`). See section *External Functions*.
 
 ### Customizing Layout (Log Message Format)
 
-The content and structure of log messages sent to appenders are controlled by a `LayoutImpl` object. By default, a standard layout is used, but you can inject your own formatting logic **once** at the start of your script.
+The content and structure of log messages sent to appenders are controlled by a `Layout/LayoutImpl` interface/object. By default, a standard layout is used, but you can inject your own formatting logic **once** at the start of your script.
 
 #### Example: Short Layout (No Timestamp)
 
@@ -167,7 +170,7 @@ The content and structure of log messages sent to appenders are controlled by a 
 const shortLayout = new LayoutImpl(LayoutImpl.shortFormatterFun)
 AbstractAppender.setLayout(shortLayout)
 
-let logger = Logger.getInstance(Logger.LEVEL.INFO, Logger.ACTION.CONTINUE)
+const logger = LoggerImpl.getInstance(LoggerImpl.LEVEL.INFO, LoggerImpl.ACTION.CONTINUE)
 logger.addAppender(ConsoleAppender.getInstance())
 
 logger.info("Script started.")
@@ -189,7 +192,7 @@ Sample log output:
 const jsonLayout = new LayoutImpl(event => JSON.stringify(event))
 AbstractAppender.setLayout(jsonLayout)
 
-let logger = Logger.getInstance(Logger.LEVEL.INFO, Logger.ACTION.CONTINUE)
+const logger = LoggerImpl.getInstance(LoggerImpl.LEVEL.INFO, LoggerImpl.ACTION.CONTINUE)
 logger.addAppender(ConsoleAppender.getInstance())
 
 logger.info("Structured log output")
@@ -211,7 +214,7 @@ const prodPrefixFactory: LogEventFactory
     = (msg: string, type: LOG_EVENT) => new LogEventImpl(`[PROD] ${msg}`, type)
 AbstractAppender.setLogEventFactory(prodPrefixFactory)
 
-let logger = Logger.getInstance(Logger.LEVEL.INFO, Logger.ACTION.CONTINUE)
+const logger = LoggerImpl.getInstance(LoggerImpl.LEVEL.INFO, LoggerImpl.ACTION.CONTINUE)
 logger.addAppender(ConsoleAppender.getInstance())
 
 logger.info("Script started.")
@@ -220,7 +223,7 @@ Sample output (default layout):
 ```
 [2025-06-15 05:34:08,123] [INFO] [PROD] Script started.
 ```
-> A custom factory is useful for tagging logs or integrating with external systems, without having to change every log message call.
+> A custom factory is useful for tagging logs or integrating with external systems, without having to change every log message.
 
 ---
 
@@ -228,7 +231,7 @@ Sample output (default layout):
 
 The `extraFields` parameter is an advanced feature allowing you to attach additional structured data to any log event. This is useful for tagging logs with context (like function names, user IDs, or custom metadata) and for downstream integrations (e.g., exporting logs as JSON).
 
-You can pass an object with arbitrary key-value pairs as the `extraFields` argument to any logging method. These fields will be included in the underlying `LogEventImpl` instance and are available in custom layouts, factories, or appenders.
+You can pass an object with arbitrary key-value pairs as the `extraFields` argument to any logging method. These fields will be included in the underlying `LogEventImpl` instance and are available in custom layouts, factories, loggers or appenders.
 
 #### Example: Adding custom fields to a log entry
 
@@ -238,7 +241,7 @@ logger.info("Processing started", { step: "init", user: "alice@example.com" })
 ```
 Produces the following output:
 ```
-[INFO] Processing started extraFields: { step: "init", user: "alice@example.com" }
+[INFO] Processing started {step:"init",user:"alice@example.com"}
 ```
 and
 ```typescript
@@ -246,7 +249,7 @@ logger.error("Failed to save", { errorCode: 42, item: "Budget2025" })
 ```
 Produces the following:
 ```
-[ERROR] Failed to save (extraFields: { errorCode: 42, item: "Budget2025" })
+[ERROR] Failed to save {errorCode:42,item:"Budget2025"}
 ```
 
 #### How it works
@@ -258,6 +261,7 @@ Produces the following:
   - `Logger.trace(message, extraFields?)`
 - `extraFields` can be any object (e.g., `{ key: value, ... }`).  
 - If you use a custom layout or export logs, you can access these fields from the `LogEvent` interface.
+- `log` method for appenders allows extra fields too.
 
 #### Example: Exporting logs with extraFields
 
@@ -272,16 +276,16 @@ state.criticalEvents.forEach(event => {
 ```
 Extra fields, if present, will be part of the `toString()` method for the `LogEvent`:
 ```typescript
-let event = new LogEventImpl("Showing toString", LOG_EVENT.INFO, {user: "admin", sessionId: "123"})
+let event = new LogEventImpl("Event with extrra fields", LOG_EVENT.INFO, {user: "admin", sessionId: "123"})
 console.log(`event(extra fields)=${event.toString()}`)
-event = new LogEventImpl("Showing toString", LOG_EVENT.INFO)
+event = new LogEventImpl("Standard event", LOG_EVENT.INFO)
 console.log(`event=${event.toString()}`)
 ```
 Here is the `toString()` output (first line: info event with extra fields, second line: without extra fields):
 ```
-event(extra fields)=LogEventImpl: {timestamp="2025-06-19 19:10:34,586", type="INFO", message="Showing toString", 
+event(extra fields)=LogEventImpl: {timestamp="2025-06-19 19:10:34,586", type="INFO", message="Event with extra fields", 
     extraFields={"user":"admin","sessionId":"123"}}
-event=LogEventImpl: {timestamp="2025-06-19 19:10:34,586", type="INFO", message="Showing toString"}
+event=LogEventImpl: {timestamp="2025-06-19 19:10:34,586", type="INFO", message="Standard event"}
 ```
 
 ---
@@ -301,22 +305,24 @@ function main(workbook: ExcelScript.Workbook) {
   // AbstractAppender.setLogEventFactory(prodPrefixFactory)
 
   // Set verbosity up to TRACE and continue on error/warning
-  let logger = Logger.getInstance(Logger.LEVEL.TRACE, Logger.ACTION.CONTINUE)
+  const logger = LoggerImpl.getInstance(LoggerImpl.LEVEL.TRACE, LoggerImpl.ACTION.CONTINUE)
 
   // Add appenders
   logger.addAppender(ConsoleAppender.getInstance())
-  const logCell = workbook.getActiveWorksheet().getRange("C2")
-  logger.addAppender(ExcelAppender.getInstance(logCell))
+  const cellRng = workbook.getActiveWorksheet().getRange("C2")
+  logger.addAppender(ExcelAppender.getInstance(cellRng))
 
   // Logging (with short layout, output shown as comments):
   logger.info("Script started.")           // [INFO] Script started.
-  logger.trace("This is a trace message.") // [TRACE] This is a trace message.
-  logger.warn("This is a warning.")        // [WARN] This is a warning.
+  logger.trace("This is a trace message")  // [TRACE] This is a trace message
+  logger.warn("This is a warning")         // [WARN] This is a warning
   logger.error("This is an error!")        // [ERROR] This is an error! (if ACTION.EXIT, aborts script)
 
   // ExcelAppender outputs in cell C2: with default layout
   // [2025-06-26 00:38:10,688] [INFO]  Script started (green text)
   // [2025-06-26 00:38:10,688] [TRACE] This is a trace message (gray text)
+  // [2025-06-26 00:38:10,688] [WARN] This is a warning (orange text)
+  // [2025-06-26 00:38:10,688] [TRACE] This is an error (red text)
 }
 ```
 > You can set the layout or log event factory only before any logger or appender is initialized, or before any log event is sent. This ensures consistent formatting and event structure throughout execution.
@@ -372,11 +378,11 @@ This ensures the logging framework is robust and reliable across both developmen
   Yes, just add both appenders.
 
 - **How do I change log level or action after initialization?**  
-  In non-production/test-only scenarios, use `Logger.clearInstance()` and then call `getInstance()` with new options.
+  In non-production/test-only scenarios, use `LoggerImpl.clearInstance()` and then call `LoggerImpl.getInstance()` with new options.
 
 - **Why do I get a `ScriptError`?**  
-  If you send an error or warning log event and `Logger.ACTION.EXIT` is set (and `Logger.LEVEL != LEVEL.OFF`), the logger will throw and abort the script.
-  `ScriptError` is also thrown for internal errors, such as invalid input arguments or incorrect configuration.
+  If you send an error or warning log event and `LoggerImpl.ACTION.EXIT` is set (and `LoggerImpl.LEVEL != LoggerImpl.LEVEL.OFF`), the logger will throw and abort the script.
+  `ScriptError` is also thrown for internal errors, in case any internal validation fails or incorrect configuration.
 
 - **Why can I only add one of each appender type?**  
   To avoid duplicate logs on the same channel; each appender represents a unique output.
@@ -385,7 +391,7 @@ This ensures the logging framework is robust and reliable across both developmen
   By design, all channels (appenders) receive the same log event message for consistency.
 
 - **Why does the output for `ExcelAppender` override the previous message?**
-  By design, the use case for `ExcelAppender` was intended for the default configuration (i.e., a logger with `WARN` level and action `EXIT`). You may want the script to stop if there is any warning or error. Adding more than one event in the same cell (e.g., concatenating via `\n`) is possible, but this defeats the purpose of highlighting each event type with color, since the color will affect the entire cell content. To display each log event in its own cell, you would need to adjust or extend `ExcelAppender`.
+  By design, the use case for `ExcelAppender` was intended for the default configuration (i.e., a logger with `WARN` level and action `EXIT`). You may want the script to stop if there is any warning or error. Adding more than one event in the same cell (e.g., concatenating via `\n`) is possible, but this defeats the purpose of highlighting each event type with color, since the color will affect the entire cell content (`ExcelScript` doesn't allow to color a portion of a cell content). To display each log event in its own cell, you would need to adjust or extend `ExcelAppender`.
 
 - **Why am I getting unexpected results when running some tests in Office Scripts compared to Node.js/TypeScript?**  
   This can happen because Office Scripts executes code asynchronously, meaning some operations (like logging or cell updates) may not complete in strict sequence. As a result, test outcomes may differ from those in Node.js/TypeScript, which runs synchronously and flushes operations immediately.
@@ -416,6 +422,71 @@ This ensures the logging framework is robust and reliable across both developmen
 - TypeDoc documentation: [TYPEDOC](https://dlealv.github.io/officescripts-logging-framework/typedoc/)
 - Git basic documentation: [docs/git-basics](docs/git-basics.md)
 - Unit testing framework repository: [officescripts-unit-test-framework](https://github.com/dlealv/officescripts-unit-test-framework) from the same author. Used for testing the current repository. Check repository's details for more information.
+
+### External Functions <a href="#externalFunctions">External Functions</a>
+The following functions are defined outside of their respective classes in `src/logger.ts` due to Office Scripts limitations, which prevent initializing class properties with function definitions inside the class body. As a result, these functions are not included in TYPEDOC-generated documentation, since TYPEDOC only documents class members. For completeness, their source code and documentation are provided below.
+
+#### Functions related to `LayoutImpl`
+
+```typescript
+/**
+ * Convenience public constant to help users to define a short format for log events. 
+ * Formats a log event as a short string as follows '[type] message'.
+ * If extraFields are present in the event, they will be appended as a JSON object (surrounded by braces) to the output.
+ * Example: `[ERROR] Something bad happened {"user":"dlealv","id":42}`.
+ * Defined as a named function to ensure `toString()` of `LayoutImpl` returns the function name.
+ * @param event - The log event to format.
+ * @returns A formatted string representation of the log event, as it will be sent to the appenders.
+ */
+LayoutImpl.shortFormatterFun = Object.freeze(function shortLayoutFormatterFun(event: LogEvent): string {
+  const sType = LOG_EVENT[event.type]
+  let extraFieldsStr = ""
+  if (event.extraFields && Object.keys(event.extraFields).length > 0) {
+    extraFieldsStr = ` ${JSON.stringify(event.extraFields)}` // JSON.stringify includes the braces
+  }
+  return `[${sType}] ${event.message}${extraFieldsStr}`
+})
+
+/**
+ * Default formatter function. Created as a named function. Formats a log event as `[timestamp] [type] message`.
+ * The timestamp is formatted as `YYYY-MM-DD HH:mm:ss,SSS`.
+ * If extraFields are present in the event, they will be appended as a JSON object (surrounded by braces) to the  output.
+ * Example: `[2025-06-19 15:06:41,123] [ERROR] Something bad happened {"user":"dlealv","id":42}`.
+ * Defined as a named function to ensure `toString()` of `LayoutImpl` returns the function name.
+ * @param event - The log event to format.
+ * @returns A formatted string representation of the log event, as it will be sent to the appenders.
+ */
+LayoutImpl.defaultFormatterFun = Object.freeze(function defaultLayoutFormatterFun(event: LogEvent): string {
+  const sDATE = Utility.date2Str(event.timestamp)
+  const sType = LOG_EVENT[event.type]
+  let extraFieldsStr = ""
+  if (event.extraFields && Object.keys(event.extraFields).length > 0) {
+    extraFieldsStr = ` ${JSON.stringify(event.extraFields)}` // JSON.stringify includes the braces
+  }
+  return `[${sDATE}] [${sType}] ${event.message}${extraFieldsStr}`
+})
+```
+
+#### Functions related to `AbstractAppender`
+```typescript
+/**
+ * Default log event factory function used by the `AbstractAppender`.
+ * It creates a new `LogEventImpl` instance with the provided message, event type, and optional extra fields.
+ * This function is frozen to prevent modifications at runtime.
+ * @param message - The message to log.
+ * @param eventType - The type of the log event (from `LOG_EVENT` enum).
+ * @param extraFields - Optional additional fields for the log event.
+ * @returns A new `LogEventImpl` instance.
+ * @throws ScriptError if the parameters are invalid.
+ */
+AbstractAppender.defaultLogEventFactoryFun = Object.freeze(
+  function defaultLogEventFactoryFun(message: string, eventType: LOG_EVENT, extraFields?: LogEventExtraFields) {
+    return new LogEventImpl(message, eventType, extraFields)
+  }
+)
+```
+
+---
 
 ## License
 
