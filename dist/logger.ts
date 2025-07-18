@@ -32,7 +32,7 @@
  * Logger.addAppender(ConsoleAppender.getInstance())
  * Logger.info("Script started") // Output: [INFO] Script started
  * ```
- * @remarks Designed and tested for Office Scripts runtime. Extendable with custom appenders via the 'Appender' interface.
+ * @remarks Designed and tested for Office Scripts and Node.js/TypeScript runtime. Extendable with custom appenders via the 'Appender' interface.
  * @author David Leal
  * version 2.1.0
  * creation date: 2024-10-01
@@ -45,16 +45,16 @@
 /**
  * Enum representing log event types.
  * Each value corresponds to a the level of verbosity and is used internally to filter messages.
- * `Logger.LEVEL` static constants was implemented in a way to align with the order of the enum
+ * `LoggerImpl.LEVEL` static constants was implemented in a way to align with the order of the enum
  * `LOG_EVENT`, so the *order* on how the `LOG_EVENT` values are defined matters.
  * 
  * Important:
- * - If new values are added, update the logic in related classes (e.g. `ExcelAppender`, `Logger`, etc.).
- * - Don't start the `LOG_EVENT` enum with `0`, this value is reserved for `Logger.LEVEL`
- *      for not sending log events (`Logger.LEVEL.OFF`).
+ * - If new values are added, update the logic in related classes (e.g. `ConsoleAppender`, `ExcelAppender`, `LoggerImpl`, etc.).
+ * - Don't start the `LOG_EVENT` enum with `0`, this value is reserved for `LoggerImpl.LEVEL`
+ *      for not sending log events (`LoggerImpl.LEVEL.OFF`).
  *      It ensures the verbose level values are aligned with the `LOG_EVENT` enum.
- *      `Logger.LEVEL` is built based on `LOG_EVENT`, just adding as first value `0`, i.e.
- *      `Logger.OFF`, therefore the verbosity respects the same order of the `LOG_EVENT`.
+ *      `LoggerImpl.LEVEL` is built based on `LOG_EVENT`, just adding as first value `0`, i.e.
+ *      `LoggerImpl.OFF`, therefore the verbosity respects the same order of the `LOG_EVENT`.
  * @remarks It was defined as an independent entity since it is used by appenders and by the Logger.
 */
 enum LOG_EVENT {
@@ -68,9 +68,10 @@ enum LOG_EVENT {
 // --------------------
 
 /**
- * Function type for creating a LogEvent. Used in appender implementations.
+ * Function type for creating a `LogEvent`. Used in appender implementations.
  * @param eventType - The log event type.
  * @param message - The log message.
+ * @param extraFields - Optional additional fields for the log event.
  * @returns A LogEvent object.
  */
 type LogEventFactory = (message: string, eventType: LOG_EVENT, extraFields?: LogEventExtraFields) => LogEvent
@@ -79,6 +80,8 @@ type LogEventFactory = (message: string, eventType: LOG_EVENT, extraFields?: Log
  *  It is a plain object with string, number, Date, or function values.
  *  Functions are expected to return a string when called.
  *  This allows for dynamic content in log events.
+ *  @param key - The name of the field.
+ *  @returns The value of the field, which can be a string, number, Date, or a function that returns a string.
  *  @remarks
  *  - Functions should be used for dynamic values that need to be evaluated at the time of logging.
  *  - Avoid using complex objects or large data structures to keep log events lightweight.
@@ -174,6 +177,7 @@ interface Layout {
    * Formats the given log event into its core string representation.
    * @param event - The log event to format (must be a valid, immutable `LogEvent`).
    * @returns The formatted string representing the event's core content. The formatted event will be the output of the appender.
+   * @throws ScriptError if the event is invalid or cannot be formatted.
    */
   format(event: LogEvent): string
 
@@ -194,11 +198,11 @@ interface Layout {
  *   - Convenience logging via `log(msg: string, event: LOG_EVENT)`
  * - Appenders are responsible for sending log events, not formatting (core formatting is handled by the `Layout` interface).
  * - Implementations should be stateless or minimize instance state except for tracking the last sent event.
- * - Common formatting and event creation concerns (such as layout or logEventFactory) are handled by the `AbstractAppender` base class 
+ * - Common formatting and event creation concerns (such as layout or log event factory) are handled by the `AbstractAppender` base class 
  *   and are not part of the interface contract.
  * - `getLastLogEvent()` is primarily for diagnostics, testing, or error reporting.
  * - `toString()` must return diagnostic information about the appender and its last log event.
- * - Provides to log methods sending a LogEvent object or a message with an event type and optional extra fields.
+ * - Provides to log methods sending a `LogEvent` object or a message with an event type and optional extra fields.
  *   This allows flexibility in how log events are created and sent.
  * @see {@link AbstractAppender} for a base class that implements this interface.
  * @see {@link LogEvent} for the structure of log events.
@@ -218,6 +222,7 @@ interface Appender {
    * @param msg - The message to log.
    * @param type - The type of log event (from `LOG_EVENT` enum).
    * @param extraFields - Optional structured data (object) to attach to the log event (e.g., context info, tags).
+   * @throws ScriptError if the log message is invalid or cannot be delivered.
    */
   log(msg: string, type: LOG_EVENT, extraFields?: object): void
 
@@ -241,6 +246,8 @@ interface Appender {
  * Provides methods for logging messages, querying log state, managing appenders, and exporting logger state.
  * Implementations should ensure they should not maintain global mutable state outside the singleton and efficient 
  * log event handling.
+ * @remarks
+ * - Usually the `LoggerImpl` implementation should be implemented via *singleton pattern*.
  * @see {@link LogEvent} for the structure of log events.
  * @see {@link Appender} for the interface that handles sending log events to output channels.
  * @see {@link LOG_EVENT} for the enumeration of log event types.
@@ -251,9 +258,9 @@ interface Logger {
    * Sends an error log event with the provided message and optional extraFields to all appenders.
    * @param msg - The error message to log.
    * @param extraFields - Optional structured data (object) to attach to the log event. May include metadata, context, etc.
-   * @throws ScriptError if 
-   *          - The singleton instance is not available (not instantiated)
-   *          - The logger is configured to exit on critical events.
+   * @throws ScriptError if:
+   * - The singleton instance is not available (not instantiated)
+   * - The logger is configured to exit on critical events such as warnings and errors.
    */
   error(msg: string, extraFields?: object): void
 
@@ -261,9 +268,9 @@ interface Logger {
    * Sends a warning log event with the provided message and optional extraFields to all appenders.
    * @param msg - The warning message to log.
    * @param extraFields - Optional structured data (object) to attach to the log event.
-   * @throws ScriptError if 
-   *          - The singleton instance is not available (not instantiated)
-   *          - The logger is configured to exit on critical events.
+   * @throws ScriptError if:
+   * - The singleton instance is not available (not instantiated)
+   * - The logger is configured to exit on critical events such as warnings and errors.
    */
   warn(msg: string, extraFields?: object): void
 
@@ -329,20 +336,20 @@ interface Logger {
   /**
    * Sets the array of appenders for the logger.
    * @param appenders - The array of Appender instances to set.
-   * @throws ScriptError if 
-   *         - The singleton instance is not available (not instantiated).
-   *         - The resulting array doesn't contain unique implementations of Appender.
-   *         - appender is `null` or `undefined` or has `null` or `undefined` elements
+   * @throws ScriptError if:
+   *  - The singleton instance is not available (not instantiated).
+   *  - The resulting array doesn't contain unique implementations of Appender.
+   *  - appender is `null` or `undefined` or has `null` or `undefined` elements
    */
   setAppenders(appenders: Appender[]): void
 
   /**
    * Adds a new appender to the logger.
    * @param appender - The Appender instance to add.
-   * @throws ScriptError if 
-   *         - The singleton instance is not available (not instantiated).
-   *         - The appender is `null` or `undefined`.
-   *         - The appender is already registered in the logger.
+   * @throws ScriptError if:
+   * - The singleton instance is not available (not instantiated).
+   * - The appender is `null` or `undefined`.
+   * - The appender is already registered in the logger.
    * @see {@link Logger.setAppenders} for setting multiple appenders at once and for more details
    *    on the validation of the appenders.
    */
@@ -383,7 +390,7 @@ interface Logger {
   reset(): void
 
   /**
-   * Exports the current state of the logger, including level, action, error/warning counts, and critical events.
+   * Exports the current state of the logger, including level, action, error/warning counts, and critical events (warnings and errors).
    * @returns An object containing the logger's state.
    * @throws ScriptError if the singleton instance is not available (not instantiated).
    */
@@ -396,7 +403,7 @@ interface Logger {
   }
 
   /**
-   * Returns a string representation of the logger's state, including level, action, and message counts.
+   * Returns a string representation of the logger's state, including level, action, and message counts and appenders.
    * @returns A string describing the logger's current state.
    * @throws ScriptError if the singleton instance is not available (not instantiated).
    */
@@ -507,6 +514,10 @@ class Utility {
    * @param funName Used to identify the function name in the error message.
    * @param context 
    * @throws ScriptError if the log event factory is not a function.
+   * @remarks
+   * Identical method already defined in `AbstractAppender` just keep it here in case in the future it can be used
+   * by other classes that need to validate a log event factory. At this time is not used but the test cases where
+   * defined for this class in `test/main.ts` so we keep it for potential future use.
    */
   public static validateLogEventFactory(
     factory: unknown, // or Function, or your specific function type
@@ -523,9 +534,8 @@ class Utility {
 
 // #region LogEventImpl
 /**
- * Implements the LogEvent interface, providing a concrete representation of a log event.
- * It includes properties for the event type, message, and timestamp, along with methods to manage
- * the layout used for formatting log events before sending them to appenders.
+ * Implements the `LogEvent` interface, providing a concrete representation of a log event.
+ * It includes properties for the event type, message, timestamp and additional extra fields, along with validation methods.
  * @remarks
  * - This class is immutable after construction, ensuring that all properties are set at creation time.
  * - It validates the input parameters to ensure they conform to expected types and constraints.
@@ -560,7 +570,6 @@ class LogEventImpl implements LogEvent {
    * - This class is immutable after construction, ensuring that all properties are set at creation time.
    * - It validates the input parameters to ensure they conform to expected types and constraints.
    * - The `extraFields` property allows for extensibility, enabling additional metadata to be attached to log events.
-   * - The `toString()` method provides a standardized string representation of the log event.
    */
   constructor(message: string, type: LOG_EVENT, extraFields?: LogEventExtraFields, timestamp: Date = new Date(),
   ) {
@@ -717,7 +726,7 @@ class LogEventImpl implements LogEvent {
  * Default implementation of the `Layout` interface.
  * Formats log events into a string using a provided or default formatting function.
  * @remarks
- * - Uses the Strategy Pattern for extensibility: you can pass a custom formatting function (strategy) to the constructor.
+ * - Uses the *Strategy Pattern* for extensibility: you can pass a custom formatting function (strategy) to the constructor.
  * - All events are validated to conform to the `LogEvent` interface before formatting.
  * - Throws `ScriptError` if the event does not conform to the expected `LogEvent` interface.
  * @see {@link Layout} for the interface definition.
@@ -742,34 +751,42 @@ class LayoutImpl implements Layout {
   private readonly _formatter: LayoutFormatter
 
   /**
-   * Constructs a new `LayoutImpl`.
-   * 
-   * @param formatter - Optional. A function that formats a `LogEvent` as a string.
-   *                    If not provided, a default formatter is used: `[timestamp] [type] message`.
-   *                    The formatter function synchronous and must accept a single `LogEvent`
-   *                    parameter and return a string.
-   *
-   * @remarks Strategy Pattern to allow flexible formatting via formatter function.
-   * Pass a custom function to change the formatting logic at runtime.
-   * @throws ScriptError if:
-   *         - The formatter is not a function or does not have the expected arity (`1` parameter).
-   *         - The formatter is `null` or `undefined`.
-   *         - The instance object is `undefined` or `null` (if subclassed or mutated in ways that break the interface).
-   * @example
-   * // Using the default formatter:
-   * const layout = new LayoutImpl()
-   * // Using a custom formatter for JSON output:
-   * const jsonLayout = new LayoutImpl(event => JSON.stringify(event))
-   * // Using a formatter for XML output:
-   * const xmlLayout = new LayoutImpl(event =>
-   *   `<log><type>${event.type}</type><message>${event.message}</message></log>`
-   * )
-   * // Using a shorter format [type] [message]:
-   * const shortLayout = new LayoutImpl(e => `[${LOG_EVENT[e.type]}] ${e.message}`)
-   * // Using a custom formatter with a named function, so in toString() shows the name of the formatter.
-   * let shortLayoutFun: Layout = new LayoutImpl(
-   *   function shortLayoutFun(e:LogEvent):string{return `[${LOG_EVENT[e.type]}] ${e.message}`})
-   */
+    * Constructs a new `LayoutImpl` with an optional custom formatter.
+    *
+    * @param formatter - (Optional) A function that formats a `LogEvent` as a string.
+    *                    If omitted, uses the default formatter: `[timestamp] [type] message`.
+    *                    The formatter must accept a single `LogEvent` parameter, and return a string.
+    *
+    * @remarks
+    * - Implements the *Strategy Pattern*: pass a custom formatter to change output format at runtime.
+    * - Formatter must be a function of arity 1; see {@link LayoutFormatter}.
+    * - Throws `ScriptError` if the formatter is invalid or the instance is misconfigured.
+    *
+    * @throws ScriptError if:
+    *   - The formatter is not a function or does not accept exactly one argument.
+    *   - The formatter is `null` or `undefined`.
+    *   - The instance is `null` or `undefined` (e.g., due to subclassing or mutation).
+    *
+    * @example
+    * // Default formatter:
+    * const layout = new LayoutImpl()
+    *
+    * // Custom JSON formatter:
+    * const jsonLayout = new LayoutImpl(event => JSON.stringify(event))
+    *
+    * // XML formatter:
+    * const xmlLayout = new LayoutImpl(event =>
+    *   `<log><type>${event.type}</type><message>${event.message}</message></log>`
+    * )
+    *
+    * // Short format: [type] message
+    * const shortLayout = new LayoutImpl(e => `[${LOG_EVENT[e.type]}] ${e.message}`)
+    *
+    * // Named function for better diagnostics in toString():
+    * const namedShortLayout = new LayoutImpl(
+    *   function shortLayoutFun(e: LogEvent): string { return `[${LOG_EVENT[e.type]}] ${e.message}` }
+    * )
+    */
   constructor(formatter?: LayoutFormatter) {
     this._formatter = formatter ?? LayoutImpl.defaultFormatterFun
     LayoutImpl.validateLayout(this as LayoutImpl, "LayoutImpl.constructor")
@@ -806,19 +823,17 @@ class LayoutImpl implements Layout {
   }
 
   /**
-   * Asserts that the provided object implements the Layout interface.
+   * Asserts that the provided object implements the `Layout` interface.
    * Checks for the public `format` method (should be a function taking one argument).
-   * Also validates the internal `_formatter` property if present, by calling `validateFormatter`.
-   * Used by appenders to validate layout objects at runtime.
+   * It used by `LayoutImpl` and appenders to ensure that the layout is valid before using it.
    *
-   * @param layout - The object to validate as a Layout implementation.
+   * @param layout - The object to validate as a `Layout` implementation.
    * @param context - (Optional) Additional context for error messages.
    * @throws ScriptError if:
    *    - layout is `null` or `undefined`.
    *    - format is not a function or doesn't have arity `1`.
-   *    - _formatter is present and is missing, not a function, or doesn't have arity `1`.
    */
-  static validateLayout(layout: Layout, context?: string) {
+  public static validateLayout(layout: Layout, context?: string) {
     const PREFIX = context ? `[${context}]: ` : "[LayoutImpl.validateLayout]: "
     if (!layout || typeof layout !== "object") {
       throw new ScriptError(PREFIX + "Invalid Layout: layout object is null or undefined")
@@ -835,16 +850,16 @@ class LayoutImpl implements Layout {
   }
 
   /**
-   * Validates that the provided value is a valid formatter function
-   * for use in LayoutImpl (`_formatter` property). The formatter must be
-   * a function accepting a single LogEvent argument and must return a non-empty, non-`null` string.
+   * Validates the provided value is a valid formatter function
+   * for use in `LayoutImpl` (`_formatter` property). The formatter must be
+   * a function accepting a single `LogEvent` argument and must return a non-empty, non-`null` string.
    *
    * @param formatter - The candidate formatter function to validate.
    * @param context - (Optional) Additional context for error messages.
    * @throws ScriptError if formatter is missing, not a function, doesn't have arity `1`,
    *                     or returns `null`/empty string for a sample event.
    */
-  static validateFormatter(formatter: LayoutFormatter, context?: string) {
+  private static validateFormatter(formatter: LayoutFormatter, context?: string) {
     const PREFIX = context ? `[${context}]: ` : "[LayoutImpl.validateFormatter]: "
     if (typeof formatter !== "function" || formatter.length !== 1) {
       throw new ScriptError(
@@ -919,22 +934,31 @@ LayoutImpl.defaultFormatterFun = Object.freeze(function defaultLayoutFormatterFu
 // #region AbstractAppender
 /**
  * Abstract base class for all log appenders.
- * This class defines shared utility methods to standardize log formatting,
- * label generation, and event validation across concrete appender implementations.
+ * Provides a common interface and shared functionality for concrete appender implementations.
  * 
- * It relies on a `LogEventFactory` function to create log events, enabling flexible
- * and customizable event creation strategies. The `LogEventFactory` is validated on
- * construction to ensure it meets the expected signature. This design allows users
- * to supply custom event creation logic if needed.
- *
- * Appenders such as `ConsoleAppender` and `ExcelAppender` should extend this class
- * to inherit consistent logging behavior and event creation via the `LogEventFactory`.
+ * Features:
+ * - Allows specifying the formatting of log events via a shared `Layout` (see {@link Layout}).
+ * - Uses a static `LogEventFactory` function type to create log events, enabling flexible and customizable event creation.
+ * - Implements the core logic for logging, delegating the actual delivery of log events to subclasses via the `sendEvent` method.
+ * 
+ * Usage:
+ * - Extend this class to implement specific appenders (e.g., `ConsoleAppender`, `ExcelAppender`).
+ * - Subclasses **must implement** the `sendEvent(event, context)` method to define how log events are delivered.
+ * 
+ * @remarks
+ * - The static layout and log event factory are shared across all appenders.
+ * - Designed for extensibility and consistency across different output targets.
+ * 
+ * @see {@link LOG_EVENT} for the enumeration of log event types.
+ * @see {@link LogEvent} for the structure of log events.
+ * @see {@link Layout} for the layout used to format log events before sending them to appenders.
+ * @see {@link LayoutImpl} for the default layout implementation.
  * @see {@link Appender} for the interface definition.
  * @see {@link LogEventFactory} for the factory function type used to create log events.
- * @see {@link Layout} for the layout used to format log events before sending them to appenders.
+
  */
 abstract class AbstractAppender implements Appender {
-  // Default factory function to create LogEvent instances, if was not set before.
+  /**Default factory function to create `LogEvent` instances. Used in case it was not set before by the user.*/
   public static defaultLogEventFactoryFun: LogEventFactory
   // Static layout shared by all events
   private static _layout: Layout | null = null
@@ -996,7 +1020,7 @@ abstract class AbstractAppender implements Appender {
   /**
    * Sets the layout associated to all events, the layout is assigned only if it was not set before.
    * @param layout - The layout to set.
-   * @throws ScriptError if the layout is not a valid Layout implementation.
+   * @throws ScriptError if the layout is not a valid `Layout` implementation.
    */
   public static setLayout(layout: Layout): void {
     const CONTEXT = "AbstractAppender.setLayout"
@@ -1007,20 +1031,22 @@ abstract class AbstractAppender implements Appender {
   }
 
   /**
-   * Log a message or log event.
+   * Log a `LogEvent` or build a log event using a message string with event type, and if present, with extra fields.
+   * It implements both the `log` methods from the `Appender` interface,
+   * since in Typescript doesn't allow you to overload methods with the same name but with different signatures.
    * @param arg1 - `LogEvent` or message string.
-   * @param arg2 - `LOG_EVENT`, only required if `arg1` is a string.
+   * @param arg2 - `LOG_EVENT` type. Only required if `arg1` is a string.
    * @param arg3 - `extraFields`, only used if `arg1` is a string.
    * @throws ScriptError if:
-   *         - `arg1` is a string but `arg2` is not provided or is not a valid `LOG_EVENT`.
-   *         - `arg1` is not a valid `LogEvent`.
-   *         - The log event factory is not set or is not a valid function.
+   * - `arg1` is a string but `arg2` is not provided or is not a valid `LOG_EVENT`.
+   * - if the `arg1` is not a string and `arg1` is not a valid `LogEvent`.
    * @remarks
-   * - If `arg1` is a string, it creates a new `LogEvent` using the provided message and event type.
+   * - If `arg1` is a string, it creates a new `LogEvent` using the provided message and event type, and if presents `extraFields`.
    * - If `arg1` is already a `LogEvent`, it validates the event and sends it directly.
    * - The method uses the static layout to format the log event before sending it to the appenders.
-   * - The `arg3` parameter is optional and can be used to provide additional fields for the log event.
-   * - It relays on abstract method `sendEvent` to send the log event to the appropriate destination.
+   * - The `arg3` parameter is optional and can be used to provide extra fields to create a log event, if `arg1` is a string.
+   * - The *Template pattern* is used, i.e. it implements common logic for logging, but delegates the actual sending of the log event
+   *   to the `sendEvent` abstract method. Therefore subclasses must implement the `sendEvent` method to define how the log event is sent.
    * @example
    * ```ts
    * // Example: Log an error message with a custom event type and extra fields.
@@ -1032,7 +1058,6 @@ abstract class AbstractAppender implements Appender {
    * ```
    * @override
    */
-
   public log(arg1: LogEvent | string, arg2?: LOG_EVENT, arg3?: LogEventExtraFields): void {
     const CONTEXT = `AbstractAppender.log`
     const PREFIX = `[${CONTEXT}]: `
@@ -1061,9 +1086,9 @@ abstract class AbstractAppender implements Appender {
   // 
 
   /**
-   * Returns a string representation of the appender.
-   * It includes the information from the base class plus the information of the current class, 
+   * Returns a string representation of the appender. It includes the class name, layout, log event factory,
    * so far this class doesn't have additional properties to show.
+   * Intended to be used by subclasses to provide information of the base class.
    * @returns A string representation of the appender.
    * @override
    */
@@ -1078,8 +1103,8 @@ abstract class AbstractAppender implements Appender {
 
   /**
    * Send the log event to the appropriate destination.
-   * This method must be implemented by subclasses to define how the log event is sent.
-   * It is responsible for sending the log event to the appropriate destination (e.g., console, file, etc.).
+   * This method **must be implemented by subclasses** to define how the log event is sent.
+   * It is the final responsible for sending the log event to the appropriate destination (e.g., console, file, etc.).
    * @param event - The log event to be sent.
    * @param context - (Optional) A string to provide additional context in case of an error.
    * @throws ScriptError if 
@@ -1088,10 +1113,10 @@ abstract class AbstractAppender implements Appender {
   protected abstract sendEvent(event: LogEvent, context?: string): void
 
   /**
- * Send the log event to the appropriate destination.
+ * Set the last log event sent to the appender.
  * @param event - The log event to be sent.
- * @throws ScriptError if 
- *         - The event is not a valid `LogEvent`.
+ * @throws ScriptError if:
+ *  - The event is not a valid `LogEvent`.
  * @remarks
  * Subclasses **must** call `setLastLogEvent(event)` after successfully sending the event,
  * otherwise `getLastLogEvent()` will not reflect the most recent log event.
@@ -1146,18 +1171,22 @@ AbstractAppender.defaultLogEventFactoryFun = Object.freeze(
 
 // #region ConsoleAppender
 /**
- * Singleton appender that logs messages to the console. It is used as default appender, 
+ * Singleton appender that logs messages to the console. It is used as default appender by this class and by `LoggerImpl`,
  * if no other appender is defined. The content of the message event sent can be customized via
  * any `Layout` implementation, but by default it uses the `LayoutImpl`.
  * Usage:
  * - Call `ConsoleAppender.getInstance()` to get the appender
  * - Automatically used if no other appender is defined
  * Warning: The console appender is a singleton, so it should not be instantiated multiple times.
- * @example:
+ * @example
  * ```ts
- * // Add console appender to the Logger
- * Logger.addAppender(ConsoleAppender.getInstance())
+ * const appender = ConsoleAppender.getInstance() // Get the singleton instance
+ * appender.log("This is an info message", LOG_EVENT.INFO) // Log an info message
+ * // Better use: 
+ * Logger.info("This is an info message") // uses the ConsoleAppender by default.
  * ```
+ * @see {@link LOG_EVENT} for the log event types used to determine the color of the message.
+ * @see {@link LogEvent} for the structure of log events.
  * @see {@link Appender} for the interface definition.
  * @see {@link AbstractAppender} for the base class documentation.
  * @see {@link Layout} for the layout used to format log events before sending them to the console.
@@ -1173,7 +1202,9 @@ class ConsoleAppender extends AbstractAppender implements Appender {
     super() // Call the parent constructor without layout
   }
 
-  /**Override `toString` method. Show the last message event sent.
+  /**Override `toString` method. It uses the parent `toString` method to get the base information,
+   * such as the layout and last log event sent to the appender.
+   * @returns A string representation of the appender, including the class name, since it doesn't have additional properties.
    * @throws ScriptError If the singleton was not instantiated
    */
   public toString(): string {
@@ -1196,12 +1227,12 @@ class ConsoleAppender extends AbstractAppender implements Appender {
   // 
 
   /**
-   * Protected method to send the event to the console. At this point is where the event is formatted before sending it to the console.
+   * Send the log event to the console. At this point is where the event is formatted before sending it to the console.
    * @param event - The log event to output.
    * @param context - (Optional) A string to provide additional context in case of an error.
-   * @throws ScriptError if 
-   *          The event is not a valid `LogEvent`.
-   *          The instance is not available (not instantiated).
+   * @throws ScriptError if
+   *   - The event is not a valid `LogEvent`.
+   *   - The instance is not available (not instantiated).
    * @override
    */
   protected sendEvent(event: LogEvent, context?: string): void {
@@ -1237,15 +1268,23 @@ class ConsoleAppender extends AbstractAppender implements Appender {
 /**
  * Singleton appender that logs messages to a specified Excel cell.
  * Logs messages in color based on the `LOG_EVENT` enum:
- * - `ERROR`: red, `WARN`: orange, `INFO`: green, `TRACE`: gray (defaults can be customized)
+ * - `ERROR`: <span style="color:#9c0006;">red</span>, `WARN`: <span style="color:#ed7d31;">orange</span>,
+ *   `INFO`: <span style="color:#548235;">green</span>, `TRACE`: <span style="color:#7f7f7f;">gray</span>
+ * - Such colors can be customized by the user
+ *
  * Usage:
- * - Must call `ExcelAppender.getInstance(range)` once with a valid single cell range
- * - range is used to display log messages
- * Warning: The Excel appender is a singleton, so it should not be instantiated multiple times.
+ * - Must call `ExcelAppender.getInstance(ExcelScript.Range)` once with a valid single cell range.
+ * - The range is used to display log messages.
  * @example
  * ```ts
- * const range = workbook.getWorksheet("Log").getRange("A1")
- * Logger.addAppender(ExcelAppender.getInstance(range)) // Add appender to the Logger
+ * const range = workbook.getActiveWorksheet().getRange("A1")
+ * const appender = ExcelAppender.getInstance(range)
+ * appender.log("This is an info message", LOG_EVENT.INFO) // Log an info message
+ * // Better use:
+ * const logger = LoggerImpl.getInstance(LoggerImpl.LOG_LEVEL.INFO)
+ * logger.addAppender(appender) // Add the Excel appender to the logger
+ * logger.info("This is an info message")
+ 
  * ```
  * @remarks
  * - The appender requires a single cell range to display log messages.
@@ -1255,19 +1294,18 @@ class ConsoleAppender extends AbstractAppender implements Appender {
  * - The appender is a singleton, so it should not be instantiated multiple times.
  * - The appender uses a private constructor to prevent user instantiation, and the instance is created via the static `getInstance` method.
  * - The appender validates the input range and colors when creating the instance.
+ * @see {@link LOG_EVENT} for the log event types used to determine the color of the message.
+ * @see {@link LogEvent} for the structure of log events.
  * @see {@link Appender} for the interface definition.
  * @see {@link AbstractAppender} for the base class documentation.
- * @see {@link LogEvent} for the structure of log events.
  * @see {@link Layout} for the layout used to format log events before sending them to Excel.
-
- * @see {@link ConsoleAppender} for an example of a console appender that logs messages to the console.
+ * @see {@link ConsoleAppender} Another implementation of the `Appender` interface that logs messages to the console.
 */
 class ExcelAppender extends AbstractAppender implements Appender {
   /**
    * Default colors for log events, used if no custom colors are provided.
-   * These colors are defined as hex strings (without the `#` prefix).
    * The colors can be customized by passing a map of `LOG_EVENT` types to hex color strings
-   * when calling getInstance(). Default colors are:
+   * when calling `getInstance()`. Default colors are:
    * - `ERROR`: `9c0006` <span style="color:#9c0006;">red</span>
    * - `WARN`: `ed7d31` <span style="color:#ed7d31;">orange</span>
    * - `INFO`: `548235` <span style="color:#548235;">green</span>
@@ -1321,6 +1359,7 @@ class ExcelAppender extends AbstractAppender implements Appender {
 
   /**
    * Returns the Excel range where log messages are written.
+   * This range must be a single cell, and it is used to display log messages.
    * @returns The `ExcelScript.Range` object representing the message cell range.
    * @remarks This is the cell where log messages will be displayed.
    */
@@ -1333,21 +1372,29 @@ class ExcelAppender extends AbstractAppender implements Appender {
    * On first call, requires a valid single cell Excel range to display log messages and optional
    * color customizations for different log events (`LOG_EVENT`). Subsequent calls ignore parameters
    * and return the existing instance.
-   * @param msgCellRng - Excel range where log messages will be written. Must be a single cell and
+   * @param msgCellRng - ExcelScript.Range where log messages will be written. Must be a single cell range and
    * not `null` or `undefined`.
    * @param eventFonts - Optional. A map of `LOG_EVENT` types to hex color codes for the font colors.
    *                     If not provided, defaults to the predefined colors in `DEFAULT_EVENT_FONTS`.
    *                     The user can provide just the colors they want to customize,
-   *                     the rest will use the default colors.
+   *                     the rest will use the default colors. These colors can be defined with or without `#` prefix.
    * @returns The singleton `ExcelAppender` instance.
-   * @throws ScriptError if `msgCellRng` was not defined or if the range covers multiple cells
-   *                    or if it is not a valid Excel range.
-   *                    if the font colors are not valid hexadecimal values for colors
+   * @throws ScriptError if:
+   * - `msgCellRng` was not defined or if the range covers multiple cells
+   * - It is not a valid Excel range or the range doesn't represent a single cell.
+   * - The font colors are not valid hexadecimal values for colors
    * @example
    * ```ts
    * const range = workbook.getWorksheet("Log").getRange("A1")
-   * const excelAppender = ExcelAppender.getInstance(range)
-   * ExcelAppender.getInstance(range, "ff0000") // ignored if called again
+   * let excelAppender = ExcelAppender.getInstance(range)
+   * excelAppender.log("info event", LOG_EVENT.INFO)
+   * // Example using custom colors for errors events for the rest it uses the default colors:
+   * const customFonts: Record<LOG_EVENT, string> = {
+   *   [LOG_EVENT.ERROR]: "0000FF", // blue
+   * }
+   * excelAppender.clearInstance() // Clear the singleton instance
+   * excelAppender = ExcelAppender.getInstance(range, customFonts)
+   * excelAppender.log("custom colored error event", LOG_EVENT.ERROR) // Output: In cell A1 with blue color: "custom colored error event"
    * ```
    * @see {@link ExcelAppender.DEFAULT_EVENT_FONTS}
   */
@@ -1396,7 +1443,8 @@ class ExcelAppender extends AbstractAppender implements Appender {
   // 
 
   /**
-   * Shows instance configuration plus last message sent by the appender
+   * Shows instance configuration plus the message cell range address, the event fonts used, plus the parent information provided by `toString` method.
+   * @returns A string representation of the appender.
    * @throws ScriptError, if the singleton was not instantiated.
    */
   public toString(): string {
@@ -1416,7 +1464,10 @@ class ExcelAppender extends AbstractAppender implements Appender {
    * Sets the value of the cell, with the event message, using the font defined for the event type,
    * if not font was defined it doesn't change the font of the cell.
    * @param event a value from enum `LOG_EVENT`.
-   * @throws ScriptError in case event is not a valid `LOG_EVENT` enum value.
+   * @param context (Optional) A string to provide additional context in case of an error.
+   *                If not provided, it uses the class name and method name as context.
+   * @throws ScriptError In case event is not a valid `LogEvent`.
+   
    * @override
    */
   protected sendEvent(event: LogEvent, context?: string): void {
@@ -1497,21 +1548,26 @@ class ExcelAppender extends AbstractAppender implements Appender {
 // #region LoggerImpl
 /**
  * Singleton class that manages application logging through appenders.
- * Supports the following log events: `ERROR`, `WARN`, `INFO`, `TRACE` (`LOG_EVENT` enum).
- * Supports the level of information (verbose) to show via `Logger.LEVEL`: `OFF`, `ERROR`, `WARN`, `INFO`, `TRACE`.
- * If the level of information (`LEVEL`) is `OFF`, no log events will be sent to the appenders.
- * Supports the action to take in case of `ERROR`, `WARN` log events: the script can
- * continue (`Logger.ACTION.CONTINUE`), or abort (`Logger.ACTION.EXIT`). Such actions only take effect
- * if the `LEVEL` is not `Logger.LEVEL.OFF`.
- * Allows defining appenders, controlling the channels the events are sent to.
- * Collects error/warning sent by the appenders via `getCriticalEvents()`.
- * 
+ * - Supports the following log events: `ERROR`, `WARN`, `INFO`, `TRACE` (`LOG_EVENT` enum).
+ * - Supports the level of information (verbose) to show via `LoggerImpl.LEVEL`: `OFF`, `ERROR`, `WARN`, `INFO`, `TRACE`,
+ *   where `WARN` is the default maximum level of verbosity.
+ * - If the level of information (`LEVEL`) is `OFF`, no log events will be sent to the appenders.
+ * - Supports the action to take in case of `ERROR`, `WARN` log events: the script can
+ *   continue (`LoggerImpl.ACTION.CONTINUE`), or abort (`LoggerImpl.ACTION.EXIT` default). Such actions only take effect
+ *   if the `LEVEL` is not `LoggerImpl.LEVEL.OFF`.
+ * - Allows defining appenders, controlling the channels the events are sent to.
+ * - Collects error/warning sent by the appenders via `getCriticalEvents()`.
+ *
  * Usage:
- * - Initialize with `Logger.getInstance(level, action)`.
- * - Add one or more appenders (e.g. `ConsoleAppender`, `ExcelAppender`)
+ * - Initialize with `LoggerImpl.getInstance(level, action)`.
+ * - Add one or more appenders (e.g. `ConsoleAppender`, `ExcelAppender`), via `addAppender()` for example.
  * - Use `logger.error()`, `logger.warn()`, `logger.info()`, or `logger.trace()` to log.
  *
  * Features:
+ * - Supports multiple appenders, allowing logs to be sent to different destinations (e.g., console, Excel).
+ * - If when invoking any log method (e.g. `logger.error()`) if the singleton was not instantiated,
+ *   it does a lazy initialization of the logger with default configuration,
+ *   i.e. `LoggerImpl.LEVEL=WARN` and `LoggerImpl.ACTION=EXIT`.
  * - If no appender is added, `ConsoleAppender` is used by default.
  * - Logs are routed through all registered appenders.
  * - Collects a summary of error/warning messages and counts.
@@ -1521,7 +1577,7 @@ class ExcelAppender extends AbstractAppender implements Appender {
  * @example
  * ```ts
  * // Minimal logger usage; ConsoleAppender is auto-added if none specified
- * LoggerImpl.getInstance().info("This message will appear in the console by default.
+ * LoggerImpl.getInstance().error("This message will appear in the console by default.")
  * ```
  * @see {@link Logger} for the interface definition.
  * @see {@link Appender} for the interface definition of the appenders
@@ -1532,14 +1588,24 @@ class ExcelAppender extends AbstractAppender implements Appender {
 class LoggerImpl implements Logger {
  
   // Constants
-  /** Static constant (enum pattern) for log event types. */
+  /** Static constant (enum pattern) for log event types. Note: enum can't be defined inside a class, so we use a constant object.
+   * - `CONTINUE` means the script continues in case of error/warning log events.
+   * - `EXIT` means the script throws a `ScriptError` in case of error/warning log events.
+   */
   public static readonly ACTION = Object.freeze({
     CONTINUE: 0, // In case of error/warning log events, the script continues
     EXIT: 1,     // In case of error/warning log event, throws a ScriptError error
   } as const)
 
   /** Static constant. It generates the same sequence as `LOG_EVENT`, but adding the zero case with `OFF`. It ensures the numeric values
-  match the values of `LOG_EVENT`. Note: enum can't be defined inside a class */
+  match the values of `LOG_EVENT`. Note: enum can't be defined inside a class, so we use a constant object.
+  - `OFF` means no log events will be sent to the appenders.
+  - `ERROR` means only error log events will be sent to the appenders.
+  - `WARN` means error and warning log events will be sent to the appenders.
+  - `INFO` means error, warning, and info log events will be sent to the appenders.
+  - `TRACE` means all log events (error, warning, info, trace) will be sent to the appenders.
+  @see {@link LOG_EVENT} for the log event types used to determine the color of the message.
+  */
   public static readonly LEVEL = Object.freeze(Object.assign({ OFF: 0 }, LOG_EVENT))
 
   // Attributes
@@ -1606,8 +1672,8 @@ class LoggerImpl implements Logger {
 
   /** 
    * Returns the level of verbosity allowed in the Logger. The levels are incremental, i.e.
-   * it includes all previous levels. For example: `Logger.WARN` includes warnings and errors since
-   * `Logger.ERROR` is lower.
+   * it includes all previous levels. For example: `LoggerImpl.LEVEL.WARN` includes warnings and errors since
+   * `LoggerImpl.LEVEL.ERROR` is lower.
    * @returns The current log level.
    * @throws ScriptError If the singleton was not instantiated.
    * @override
@@ -1631,11 +1697,11 @@ class LoggerImpl implements Logger {
   /** 
    * Sets the array of appenders with the input argument appenders.
    * @param appenders Array with all appenders to set.
-   * @throws ScriptError If the singleton was not instantiated,
-   *                     if appenders is `null` or `undefined`, or contains
-   *                     `null` or `undefined` entries,
-   *                     or if the appenders to add are not unique
-   *                     by appender class. See JSDoc from {@link LoggerImpl.addAppender} for more details.
+   * @throws ScriptError If:
+   * - The singleton was not instantiated.
+   * - appenders is `null` or `undefined`, or contains `null` or `undefined` entries.
+   * - The appenders to add are not unique
+   *   by appender class. See JSDoc from {@link LoggerImpl.addAppender} for more details.
    * @override
    */
   public setAppenders(appenders: Appender[]) {
@@ -1648,10 +1714,10 @@ class LoggerImpl implements Logger {
   /**
    * Adds an appender to the list of appenders.
    * @param appender The appender to add.
-   * @throws ScriptError If the singleton was not instantiated,
-   *                     if the input argument is `null` or `undefined`,
-   *                     or if it breaks the class uniqueness of the appenders.
-   *                     All appenders must be from a different implementation of the `Appender` class.
+   * @throws ScriptError If:
+   * - The singleton was not instantiated,
+   * - The input argument is `null` or `undefined`,
+   * - It breaks the class uniqueness of the appenders. All appenders must be from a different implementation of the `Appender` class.
    * @override
    * @see {@link LoggerImpl.setAppenders}
    */
@@ -1668,33 +1734,34 @@ class LoggerImpl implements Logger {
   }
 
   /**
-   * Returns the singleton Logger instance, creating it if it doesn't exist.
+   * Returns the singleton `Logger` instance, creating it if it doesn't exist.
    * If the `Logger` is created during this call, the provided `level` and `action`
    * parameters initialize the log level and error-handling behavior.
    * @remarks Subsequent calls ignore these parameters and return the existing instance.
-   * @param level The verbosity level (default: `Logger.LEVEL.WARN`). Controls verbosity.
+   * @param level The verbosity level (default: `LoggerImpl.LEVEL.WARN`). Controls verbosity.
    *                Sends events to the appenders up to the defined level of verbosity.
    *                The level of verbosity is incremental, except for value
-   *                `Logger.LEVEL.OFF`, which suppresses all messages sent to the appenders.
-   *                For example: `Logger.LEVEL.INFO` allows sending errors, warnings, and information events,
+   *                `LoggerImpl.LEVEL.OFF`, which suppresses all messages sent to the appenders.
+   *                For example: `LoggerImpl.LEVEL.INFO` allows sending errors, warnings, and information events,
    *                but excludes trace events.
-   * @param action The action on error/warning (default: `Logger.ACTION.EXIT`).
+   * @param action The action on error/warning (default: `LoggerImpl.ACTION.EXIT`).
    *                 Determines if the script should continue or abort.
-   *                 If the value is `Logger.ACTION.EXIT`, throws a `ScriptError` exception,
-   *                 i.e. aborts the Script. If the action is `Logger.ACTION.CONTINUE`, the
-   *                 script continues. It only takes effect if the level is not `Logger.LEVEL.OFF`.
+   *                 If the value is `LoggerImpl.ACTION.EXIT`, throws a `ScriptError` exception,
+   *                 i.e. aborts the Script. If the action is `LoggerImpl.ACTION.CONTINUE`, the
+   *                 script continues. It only takes effect if the level is not `LoggerImpl.LEVEL.OFF`.
    * @returns The singleton Logger instance.
-   * @throws ScriptError If the level input value was not defined in `Logger.LEVEL` or it doesn't
-   *                     match the `LOG_EVENT` enum values in the specified order.
-   *                     If the action input value was not defined in `Logger.ACTION`.
+   * @throws ScriptError If:
+   *  - The level input value was not defined in `LoggerImpl.LEVEL` or it doesn't
+   *    match the `LOG_EVENT` enum values in the specified order.
+   *  - The action input value was not defined in `LoggerImpl.ACTION`.
    * @example
    * ```ts
    * // Initialize logger at INFO level, continue on errors/warnings
-   * const logger = Logger.getInstance(Logger.LEVEL.INFO, Logger.ACTION.CONTINUE)
+   * const logger = Logger.getInstance(LoggerImpl.LEVEL.INFO, LoggerImpl.ACTION.CONTINUE)
    * // Subsequent calls ignore parameters, return the same instance
-   * const sameLogger = Logger.getInstance(Logger.LEVEL.ERROR, Logger.ACTION.EXIT)
+   * const sameLogger = Logger.getInstance(LoggerImpl.LEVEL.ERROR, LoggerImpl.ACTION.EXIT)
    * logger.info("Starting the Script") // Send this message to all appenders
-   * logger.trace("Step one")           // Doesn't send because of Logger.LEVEL value: INFO
+   * logger.trace("Step one")           // Doesn't send because of LoggerImpl.LEVEL value: INFO
    * ```
    */
   public static getInstance(
@@ -1728,15 +1795,16 @@ class LoggerImpl implements Logger {
 
   /**
  * Sends an error log message (with optional structured extra fields) to all appenders if the level allows it.
- * The level has to be greater than or equal to `Logger.LEVEL.ERROR` to send this event to the appenders.
+ * The level has to be greater than or equal to `LoggerImpl.LEVEL.ERROR` to send this event to the appenders.
  * After the message is sent, it updates the error counter.
  * @param msg - The error message to log.
  * @param extraFields - Optional structured data to attach to the log event (e.g., context info, tags).
  * @remarks
  * If no singleton was defined, it does lazy initialization with default configuration.
  * If no appender was defined, it does lazy initialization to `ConsoleAppender`.
- * @throws ScriptError If level is greater than `Logger.LEVEL.OFF` and the action is `Logger.ACTION.EXIT`.
- *                     If any internal error occurs while sending the event to the appenders.
+ * @throws ScriptError If:
+ * - Level is greater than `LoggerImpl.LEVEL.OFF` and the action is `LoggerImpl.ACTION.EXIT`.
+ * - If any internal error occurs while sending the event to the appenders.
  */
   public error(msg: string, extraFields?: LogEventExtraFields): void {
     this.log(msg, LOG_EVENT.ERROR, extraFields)
@@ -1744,16 +1812,16 @@ class LoggerImpl implements Logger {
 
   /**
    * Sends a warning log message (with optional structured extra fields) to all appenders if the level allows it.
-   * The level has to be greater than or equal to `Logger.LEVEL.WARN` to send this event to the appenders.
+   * The level has to be greater than or equal to `LoggerImpl.LEVEL.WARN` to send this event to the appenders.
    * After the message is sent, it updates the warning counter.
    * @param msg - The warning message to log.
    * @param extraFields - Optional structured data to attach to the log event (e.g., context info, tags).
-   * @throws ScriptError If level is greater than `Logger.LEVEL.ERROR` and the action is `Logger.ACTION.EXIT`.
-   *                     If any internal error occurs while sending the event to the appenders.
+   * @throws ScriptError If:
+   * - Level is greater than `LoggerImpl.LEVEL.ERROR` and the action is `LoggerImpl.ACTION.EXIT`.
+   * - Any internal error occurs while sending the event to the appenders.
    * @remarks
-   * If no singleton was defined, it does lazy initialization with default configuration.
-   * If no appender was defined, it does lazy initialization to `ConsoleAppender`.
-  
+   * - If no singleton was defined, it does lazy initialization with default configuration.
+   * - If no appender was defined, it does lazy initialization to `ConsoleAppender`.
    */
   public warn(msg: string, extraFields?: LogEventExtraFields): void {
     this.log(msg, LOG_EVENT.WARN, extraFields)
@@ -1761,13 +1829,13 @@ class LoggerImpl implements Logger {
 
   /**
    * Sends an info log message (with optional structured extra fields) to all appenders if the level allows it.
-   * The level has to be greater than or equal to `Logger.LEVEL.INFO` to send this event to the appenders.
+   * The level has to be greater than or equal to `LoggerImpl.LEVEL.INFO` to send this event to the appenders.
    * @param msg - The informational message to log.
    * @param extraFields - Optional structured data to attach to the log event (e.g., context info, tags).
    * @throws ScriptError If any internal error occurs while sending the event to the appenders.
    * @remarks
-   * If no singleton was defined, it does lazy initialization with default configuration.
-   * If no appender was defined, it does lazy initialization to `ConsoleAppender`.
+   * - If no singleton was defined, it does lazy initialization with default configuration.
+   * - If no appender was defined, it does lazy initialization to `ConsoleAppender`.
    */
   public info(msg: string, extraFields?: LogEventExtraFields): void {
     this.log(msg, LOG_EVENT.INFO, extraFields)
@@ -1775,13 +1843,13 @@ class LoggerImpl implements Logger {
 
   /**
    * Sends a trace log message (with optional structured extra fields) to all appenders if the level allows it.
-   * The level has to be greater than or equal to `Logger.LEVEL.TRACE` to send this event to the appenders.
+   * The level has to be greater than or equal to `LoggerImpl.LEVEL.TRACE` to send this event to the appenders.
    * @param msg - The trace message to log.
    * @param extraFields - Optional structured data to attach to the log event (e.g., context info, tags).
    * @throws ScriptError If any internal error occurs while sending the event to the appenders.
    * @remarks
-   * If no singleton was defined, it does lazy initialization with default configuration.
-   * If no appender was defined, it does lazy initialization to `ConsoleAppender`.
+   * - If no singleton was defined, it does lazy initialization with default configuration.
+   * - If no appender was defined, it does lazy initialization to `ConsoleAppender`.
    */
   public trace(msg: string, extraFields?: LogEventExtraFields): void {
     this.log(msg, LOG_EVENT.TRACE, extraFields)
@@ -1863,8 +1931,8 @@ class LoggerImpl implements Logger {
  * Returns the label for a log action value.
  * @param action - The log action to get the label for.
  * @returns The label for the action.
- *          If `action` is `undefined`, returns the label for the current logger instance's action.
- *          If neither is set, returns `UNKNOWN`.
+ *  - If `action` is `undefined`, returns the label for the current logger instance's action.
+ *  - If neither is set, returns `UNKNOWN`.
  * @example
  * ```ts
  * LoggerImpl.getActionLabel(LoggerImpl.ACTION.CONTINUE) // Returns "CONTINUE"
@@ -1884,8 +1952,8 @@ class LoggerImpl implements Logger {
   /**
   * Returns the label for the given log level.
   * @returns The label for the log level.
-  *          If `level` is `undefined`, returns the label for the current logger instance's level.
-  *          If neither is set, returns `UNKNOWN`.
+  * - If `level` is `undefined`, returns the label for the current logger instance's level.
+  * - If neither is set, returns `UNKNOWN`.
   * @example
   * ```ts
   * LoggerImpl.getLevelLabel(LoggerImpl.LEVEL.INFO) // Returns "INFO"
@@ -1904,6 +1972,8 @@ class LoggerImpl implements Logger {
 
   /**
    * @returns A string representation of the logger instance.
+   * `toString()` includes the logger's level, action, error count, warning count,
+   * and a list of appenders with their string representations.
    * @throws ScriptError If the singleton was not instantiated.
    * @override
    */
@@ -1922,9 +1992,10 @@ class LoggerImpl implements Logger {
     return `${NAME}: {${scalarInfo}, appenders: ${appendersString}}`
   }
 
-  /**Short version fo the `toString()` which exludes the appenders details.
+  /**Short version of the `toString()` which excludes the appenders details.
    * @returns Similar to `toString`, but showing the list of appenders name only.
    * @throws ScriptError If the singleton was not instantiated.
+   * @see {@link LoggerImpl.toString} for more details.
    */
   public toShortString(): string {
     const CONTEXT = `${LoggerImpl.name}.toString`
