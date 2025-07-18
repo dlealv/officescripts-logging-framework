@@ -1,7 +1,7 @@
 {
   "name": "officescripts-logging-framework",
-  "version": "2.1.3",
-  "description": "Lightweight, extensible logging framework for Office Scripts, inspired by libraries like Log4j. Enables structured logging via a singleton 'Logger', supporting multiple log levels ('Logger.LEVEL') and pluggable output targets through the 'Appender' interface",
+  "version": "2.1.4",
+  "description": "A lightweight, extensible logging framework for Office Scripts(ExcelScript), inspired by frameworks like Log4j. Add robust, structured logs to your Excel scripts with control over log levels, appenders, and error handling.",
   "main": "index.js",
   "directories": {
     "test": "test"
