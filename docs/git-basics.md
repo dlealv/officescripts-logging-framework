@@ -177,8 +177,8 @@ git pull origin main            # Merge latest main into your branch
 ### E. Delete a merged feature branch (locally and remotely)
 
 ```bash
-git branch -d my-feature        # Delete local branch
-git push origin --delete my-feature   # Delete remote branch
+git branch -d my-feature                # Delete local branch
+git push origin --delete my-feature     # Delete remote branch
 ```
 
 ---
@@ -222,6 +222,12 @@ If you try to push directly to `main` and it is protected, you will see an error
     git checkout main
     git pull origin main
     ```
+7. **Optionally remove merged branch**
+   Once the branch is merged, the branch is removed from Github, but usually it remains in the local repository. It is recommended to remove it.
+   ```bash
+    git branch --merged main              # list all branches already merged to main
+    git branch -d branch1 branch2....     # Delete all branches listed
+   ```
 
 **Tip:**  
 The `-u` flag in `git push -u origin my-feature` sets up tracking so future `git push` and `git pull` commands know which remote branch to use.
